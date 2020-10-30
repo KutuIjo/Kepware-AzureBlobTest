@@ -53,13 +53,74 @@ function parseBlobContent(downloadedString) {
   var loglocation = 1;
   while (loglocation != -1) {
     loglocation = result.indexOf("Z\"}}", startlocation);
-    console.log(loglocation);
     result = result.splice((loglocation + 4), 0, ",");
     startlocation = loglocation + 5;
   }
   result = "[{\"" + result.slice(4, -1) + "]";
   data = JSON.parse(result);
   return data;   
+}
+
+const arrAvg = arr => arr.reduce((a,b) => a + b, 0) / arr.length
+const arrMax = arr => Math.max(...arr);
+const arrMin = arr => Math.min(...arr);
+
+function calculateDeltaGatewaytoEvent(dataPoint) {
+  var delta = Date.parse(dataPoint.EventEnqueuedUtcTime) - dataPoint.timestamp;
+  return delta;
+}
+
+function calculateDeltaGatewaytoHub(dataPoint) {
+  var delta = Date.parse(dataPoint.IoTHub.EnqueuedTime) - dataPoint.timestamp;
+  return delta;
+}
+
+function calculateDeltaScanandPublish(dataPoint) {
+  var delta = Date.parse(dataPoint.IoTHub.EnqueuedTime) - dataPoint.timestamp;
+  return delta;
+}
+
+function calculateDescStat(name,arr) {
+  var statdict = {
+    name: name,
+    max: arrMax(arr),
+    min: arrMin(arr),
+    avg: arrAvg(arr)
+  }
+  return statdict;
+}
+
+function calculateData(data) {
+  var GatewaytoHubArr = [];
+  var GatewaytoEventArr = [];
+  var calculation = [];
+
+  for (var i = 0; i < data.length; i++) {
+    GatewaytoHubArr.push(calculateDeltaGatewaytoHub(data[i]));
+    GatewaytoEventArr.push(calculateDeltaGatewaytoEvent(data[i]));
+  }
+
+  var Items = ["GatewaytoHubArr","GatewaytoEventArr"];
+  var ItemsData = [GatewaytoHubArr,GatewaytoEventArr];
+  for (var i = 0; i < ItemsData.length; i++) {
+    calculation.push(calculateDescStat(Items[i],ItemsData[i]));
+  }
+  console.log(calculation);
+  return(calculation);
+}
+
+function export_csv(data) {
+  const createCsvWriter = require('csv-writer').createObjectCsvWriter;
+  const csvWriter = createCsvWriter({
+    path: 'out.csv',
+    header: [
+      {id: 'name', title: 'Name'},
+      {id: 'max', title: 'Max(ms)'},
+      {id: 'min', title: 'Min(ms)'},
+      {id: 'avg', title: 'Avg(ms)'},
+    ]
+  });
+  csvWriter.writeRecords(data).then(()=> console.log('The CSV file was written successfully'));
 }
 
 async function execute() {
@@ -85,9 +146,9 @@ async function execute() {
     const downloadedContent = await streamToString(downloadResponse.readableStreamBody);
 
     var data = parseBlobContent(downloadedContent);
-    console.log(`Data: "${data}"`);
 
     var statistics = calculateData(data);
+    export_csv(statistics);
 }
 
 execute().then(() => console.log("Done")).catch((e) => console.log(e));
